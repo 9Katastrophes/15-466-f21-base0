@@ -1,8 +1,8 @@
-# (TODO: your game's title)
+# Chaos Pong
 
-Author: (TODO: your name)
+Author: Katherine Wang
 
-Design: (TODO: In two sentences or fewer, describe what is new and interesting about your game.)
+Design: In my game, the player can choose to release 3 extra balls into play by pressing any button, creating a more fast-paced and chaotic game of pong. The AI is also improved so that it can determine the closest ball to the AI paddle and quickly respond to it.
 
 Screen Shot:
 
@@ -10,8 +10,8 @@ Screen Shot:
 
 How To Play:
 
-(TODO: describe the controls and (if needed) goals/strategy.)
+Move your mouse up and down to move your paddle (the left paddle). Press any button to release another ball. You can have up to 3 extra balls in play. The goal is to prevent balls from hitting your wall (left wall) and giving the opponent a point, while also trying to score points on the opponent's wall (right wall) by hitting it with balls.
 
-Sources: (TODO: list a source URL for any assets you did not create yourself. Make sure you have a license for the asset.)
+Sources: None
 
 This game was built with [NEST](NEST.md).
