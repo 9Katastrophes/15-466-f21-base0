@@ -127,6 +127,13 @@ bool PongMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		);
 		left_paddle.y = (clip_to_court * glm::vec3(clip_mouse, 1.0f)).y;
 	}
+    if (evt.type == SDL_KEYDOWN && extra_balls < max_extra_balls) {
+        //check if the player pressed a button, indicating they want to release another ball
+        //there can only be max_extra_balls number of extra balls in play, and we can't release anymore after reaching the limit
+        extra_balls_pos.emplace_back(glm::vec2(0.0f, 0.0f));
+        extra_balls_vel.emplace_back(glm::vec2(-1.0f, 0.0f));
+        extra_balls++;
+    }
 
 	return false;
 }
@@ -144,10 +151,22 @@ void PongMode::update(float elapsed) {
 			ai_offset_update = (mt() / float(mt.max())) * 0.5f + 0.5f;
 			ai_offset = (mt() / float(mt.max())) * 2.5f - 1.25f;
 		}
-		if (right_paddle.y < ball.y + ai_offset) {
-			right_paddle.y = std::min(ball.y + ai_offset, right_paddle.y + 2.0f * elapsed);
+        
+        //find the closest ball
+        glm::vec2 closest_ball_pos = ball;
+        glm::vec2 closest_ball_vel = ball_velocity;
+        
+        for (uint32_t i=0;i<extra_balls;i++) {
+            if (extra_balls_pos[i].x > closest_ball_pos.x) {
+                closest_ball_pos = extra_balls_pos[i];
+                closest_ball_vel = extra_balls_vel[i];
+            }
+        }
+        
+		if (right_paddle.y < closest_ball_pos.y + ai_offset) {
+			right_paddle.y = std::min(closest_ball_pos.y + ai_offset, right_paddle.y + 10.0f * elapsed);
 		} else {
-			right_paddle.y = std::max(ball.y + ai_offset, right_paddle.y - 2.0f * elapsed);
+			right_paddle.y = std::max(closest_ball_pos.y + ai_offset, right_paddle.y - 10.0f * elapsed);
 		}
 	}
 
@@ -167,6 +186,11 @@ void PongMode::update(float elapsed) {
 	speed_multiplier = std::min(speed_multiplier, 10.0f);
 
 	ball += elapsed * speed_multiplier * ball_velocity;
+    
+    //update any extra balls too
+    for (uint32_t i=0;i<extra_balls;i++){
+        extra_balls_pos[i] += elapsed * speed_multiplier * extra_balls_vel[i];
+    }
 
 	//---- collision handling ----
 
@@ -177,9 +201,10 @@ void PongMode::update(float elapsed) {
 		glm::vec2 max = glm::min(paddle + paddle_radius, ball + ball_radius);
 
 		//if no overlap, no collision:
-		if (min.x > max.x || min.y > max.y) return;
-
-		if (max.x - min.x > max.y - min.y) {
+        if (min.x > max.x || min.y > max.y) {
+            //no collision
+        }
+		else if (max.x - min.x > max.y - min.y) {
 			//wider overlap in x => bounce in y direction:
 			if (ball.y > paddle.y) {
 				ball.y = paddle.y + paddle_radius.y + ball_radius.y;
@@ -201,6 +226,40 @@ void PongMode::update(float elapsed) {
 			float vel = (ball.y - paddle.y) / (paddle_radius.y + ball_radius.y);
 			ball_velocity.y = glm::mix(ball_velocity.y, vel, 0.75f);
 		}
+        
+        //check extra balls too
+        for (uint32_t i=0;i<extra_balls;i++) {
+            //compute area of overlap:
+            glm::vec2 min = glm::max(paddle - paddle_radius, extra_balls_pos[i] - ball_radius);
+            glm::vec2 max = glm::min(paddle + paddle_radius, extra_balls_pos[i] + ball_radius);
+
+            //if no overlap, no collision:
+            if (min.x > max.x || min.y > max.y) {
+                //no collision
+            }
+            else if (max.x - min.x > max.y - min.y) {
+                //wider overlap in x => bounce in y direction:
+                if (extra_balls_pos[i].y > paddle.y) {
+                    extra_balls_pos[i].y = paddle.y + paddle_radius.y + ball_radius.y;
+                    extra_balls_vel[i].y = std::abs(extra_balls_vel[i].y);
+                } else {
+                    extra_balls_pos[i].y = paddle.y - paddle_radius.y - ball_radius.y;
+                    extra_balls_vel[i].y = -std::abs(extra_balls_vel[i].y);
+                }
+            } else {
+                //wider overlap in y => bounce in x direction:
+                if (extra_balls_pos[i].x > paddle.x) {
+                    extra_balls_pos[i].x = paddle.x + paddle_radius.x + ball_radius.x;
+                    extra_balls_vel[i].x = std::abs(extra_balls_vel[i].x);
+                } else {
+                    extra_balls_pos[i].x = paddle.x - paddle_radius.x - ball_radius.x;
+                    extra_balls_vel[i].x = -std::abs(extra_balls_vel[i].x);
+                }
+                //warp y velocity based on offset from paddle center:
+                float vel = (extra_balls_pos[i].y - paddle.y) / (paddle_radius.y + ball_radius.y);
+                extra_balls_vel[i].y = glm::mix(extra_balls_vel[i].y, vel, 0.75f);
+            }
+        }
 	};
 	paddle_vs_ball(left_paddle);
 	paddle_vs_ball(right_paddle);
@@ -233,8 +292,40 @@ void PongMode::update(float elapsed) {
 			right_score += 1;
 		}
 	}
+    
+    //check extra balls too
+    for (uint32_t i=0;i<extra_balls;i++){
+        if (extra_balls_pos[i].y > court_radius.y - ball_radius.y) {
+            extra_balls_pos[i].y = court_radius.y - ball_radius.y;
+            if (extra_balls_vel[i].y > 0.0f) {
+                extra_balls_vel[i].y = -extra_balls_vel[i].y;
+            }
+        }
+        if (extra_balls_pos[i].y < -court_radius.y + ball_radius.y) {
+            extra_balls_pos[i].y = -court_radius.y + ball_radius.y;
+            if (extra_balls_vel[i].y < 0.0f) {
+                extra_balls_vel[i].y = -extra_balls_vel[i].y;
+            }
+        }
+
+        if (extra_balls_pos[i].x > court_radius.x - ball_radius.x) {
+            extra_balls_pos[i].x = court_radius.x - ball_radius.x;
+            if (extra_balls_vel[i].x > 0.0f) {
+                extra_balls_vel[i].x = -extra_balls_vel[i].x;
+                left_score += 1;
+            }
+        }
+        if (extra_balls_pos[i].x < -court_radius.x + ball_radius.x) {
+            extra_balls_pos[i].x = -court_radius.x + ball_radius.x;
+            if (extra_balls_vel[i].x < 0.0f) {
+                extra_balls_vel[i].x = -ball_velocity.x;
+                right_score += 1;
+            }
+        }
+    }
 
 	//----- gradient trails -----
+    //extra balls don't get gradient trails :(
 
 	//age up all locations in ball trail:
 	for (auto &t : ball_trail) {
@@ -296,6 +387,9 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 	draw_rectangle(left_paddle+s, paddle_radius, shadow_color);
 	draw_rectangle(right_paddle+s, paddle_radius, shadow_color);
 	draw_rectangle(ball+s, ball_radius, shadow_color);
+    for (uint32_t i=0;i<extra_balls;i++) {
+        draw_rectangle(extra_balls_pos[i]+s, ball_radius, shadow_color);
+    }
 
 	//ball's trail:
 	if (ball_trail.size() >= 2) {
@@ -356,6 +450,9 @@ void PongMode::draw(glm::uvec2 const &drawable_size) {
 
 	//ball:
 	draw_rectangle(ball, ball_radius, fg_color);
+    for (uint32_t i=0;i<extra_balls;i++){
+        draw_rectangle(extra_balls_pos[i], ball_radius, fg_color);
+    }
 
 	//scores:
 	glm::vec2 score_radius = glm::vec2(0.1f, 0.1f);

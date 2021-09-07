@@ -32,6 +32,11 @@ struct PongMode : Mode {
 
 	glm::vec2 ball = glm::vec2(0.0f, 0.0f);
 	glm::vec2 ball_velocity = glm::vec2(-1.0f, 0.0f);
+    
+    uint32_t max_extra_balls = 3;
+    uint32_t extra_balls = 0;
+    std::vector<glm::vec2> extra_balls_pos;
+    std::vector<glm::vec2> extra_balls_vel;
 
 	uint32_t left_score = 0;
 	uint32_t right_score = 0;
